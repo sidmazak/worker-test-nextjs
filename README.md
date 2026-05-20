@@ -195,7 +195,11 @@ Coolify can auto-redeploy the compose app on Git changes, while images still com
   - Verify worker service env vars and logs.
 - **RLS errors**
   - Re-run `sql/schema.sql` to ensure policies and grants exist.
-- **No Realtime updates**
-  - Confirm publication includes `jobs`, `job_events`, `worker_heartbeats`.
-  - On self-hosted Supabase, ensure Realtime is enabled and reachable over WSS from the browser.
-  - Dashboard falls back to 5s polling (banner shows “Realtime unavailable” without flickering).
+- **No Realtime updates / banner says unavailable**
+  - **GitHub Actions secrets do not control browser Realtime.** Realtime is opened from the user’s browser to your Supabase URL (`NEXT_PUBLIC_SUPABASE_URL` on the **Coolify web** service).
+  - Confirm publication includes `jobs`, `job_events`, `worker_heartbeats` (run `sql/schema.sql`).
+  - Self-hosted Supabase (`supatest.serveriko.com`): Kong/proxy must forward **WebSocket** to the Realtime service (`/realtime/v1/websocket`). If only REST works, the dashboard still updates every 5s via polling.
+  - In browser DevTools → Network → WS, check for failed websocket to your Supabase host.
+- **Worker Coolify settings**
+  - Worker is a background process (no HTTP). You do **not** need a public domain or port `80`/`3000` on the worker service.
+  - Required env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WORKER_ID` (optional timing vars). `SUPABASE_ANON_KEY` is not used by the worker code.

@@ -3,6 +3,8 @@ type RealtimeStatus = "connecting" | "connected" | "polling";
 type ConnectionBannerProps = {
   configured: boolean;
   realtimeStatus: RealtimeStatus;
+  realtimeError?: string | null;
+  supabaseHost?: string;
 };
 
 const statusCopy: Record<
@@ -27,6 +29,8 @@ const statusCopy: Record<
 export function ConnectionBanner({
   configured,
   realtimeStatus,
+  realtimeError,
+  supabaseHost,
 }: ConnectionBannerProps) {
   if (!configured) {
     return (
@@ -40,6 +44,17 @@ export function ConnectionBanner({
   const { className, message } = statusCopy[realtimeStatus];
 
   return (
-    <div className={`rounded-lg border p-3 text-sm ${className}`}>{message}</div>
+    <div className={`rounded-lg border p-3 text-sm ${className}`}>
+      <p>{message}</p>
+      {realtimeStatus === "polling" && supabaseHost ? (
+        <p className="mt-2 text-xs opacity-80">
+          Host: {supabaseHost} — browser needs WebSocket to{" "}
+          <code className="font-mono">wss://…/realtime/v1/websocket</code>
+        </p>
+      ) : null}
+      {realtimeStatus === "polling" && realtimeError ? (
+        <p className="mt-1 text-xs opacity-80">Detail: {realtimeError}</p>
+      ) : null}
+    </div>
   );
 }

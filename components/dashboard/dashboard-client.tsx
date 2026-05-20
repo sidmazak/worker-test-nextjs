@@ -33,6 +33,7 @@ export function DashboardClient({
   const [realtimeStatus, setRealtimeStatus] = useState<
     "connecting" | "connected" | "polling"
   >("connecting");
+  const [realtimeError, setRealtimeError] = useState<string | null>(null);
   const realtimeActiveRef = useRef(false);
 
   const configured = supabaseConfig !== null;
@@ -89,6 +90,7 @@ export function DashboardClient({
         }
         if (status === "SUBSCRIBED") {
           realtimeActiveRef.current = true;
+          setRealtimeError(null);
           setRealtimeStatus("connected");
           return;
         }
@@ -99,15 +101,18 @@ export function DashboardClient({
         ) {
           realtimeActiveRef.current = false;
           setRealtimeStatus("polling");
-          if (err) {
-            console.warn("Supabase Realtime:", err.message);
-          }
+          const detail = err?.message ?? status;
+          setRealtimeError(detail);
+          console.warn("Supabase Realtime:", detail);
         }
       });
 
     const connectTimeout = window.setTimeout(() => {
       if (!cancelled && !realtimeActiveRef.current) {
         setRealtimeStatus("polling");
+        setRealtimeError(
+          "No SUBSCRIBED event within 8s — check WSS/realtime on your Supabase host."
+        );
       }
     }, 8000);
 
@@ -143,7 +148,12 @@ export function DashboardClient({
         </p>
       </header>
 
-      <ConnectionBanner configured={configured} realtimeStatus={realtimeStatus} />
+      <ConnectionBanner
+        configured={configured}
+        realtimeStatus={realtimeStatus}
+        realtimeError={realtimeError}
+        supabaseHost={supabaseConfig?.url}
+      />
       <StatsCards jobs={jobs} />
 
       <section className="grid gap-4 lg:grid-cols-12">

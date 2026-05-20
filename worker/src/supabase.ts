@@ -8,9 +8,14 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+function normalizeSupabaseUrl(url: string) {
+  return url.trim().replace(/\/+$/, "");
+}
+
 export const workerConfig = {
-  supabaseUrl:
-    process.env.SUPABASE_URL ?? requiredEnv("NEXT_PUBLIC_SUPABASE_URL"),
+  supabaseUrl: normalizeSupabaseUrl(
+    process.env.SUPABASE_URL ?? requiredEnv("NEXT_PUBLIC_SUPABASE_URL")
+  ),
   serviceRoleKey: requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
   workerId: process.env.WORKER_ID ?? "worker-1",
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS ?? 2000),
