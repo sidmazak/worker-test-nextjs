@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  web:
+    image: ghcr.io/sidmazak/worker-test-nextjs-web:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    image: ghcr.io/sidmazak/worker-test-nextjs-worker:latest
+    restart: unless-stopped
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      WORKER_ID: ${WORKER_ID:-worker-1}
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-2000}
+      SIMULATION_STEP_MS: ${SIMULATION_STEP_MS:-1200}

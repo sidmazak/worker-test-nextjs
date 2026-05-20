@@ -127,13 +127,16 @@ and SHA tags for each image.
   - `NEXT_PUBLIC_SUPABASE_URL`
 - **Repository Secret**
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  - `COOLIFY_DEPLOY_WEBHOOK_URL` (optional but recommended for immediate deploy trigger)
+  - `COOLIFY_API_TOKEN` (required if Coolify deploy webhook says auth required)
+  - `COOLIFY_WEB_DEPLOY_WEBHOOK_URL` (optional but recommended for immediate web deploy trigger)
+  - `COOLIFY_WORKER_DEPLOY_WEBHOOK_URL` (optional but recommended for immediate worker deploy trigger)
 
 `GITHUB_TOKEN` is used automatically for GHCR login/push.
 
 ### Auto deploy behavior
 
-- If `COOLIFY_DEPLOY_WEBHOOK_URL` is set, GitHub Actions will call it after images are pushed.
+- If `COOLIFY_WEB_DEPLOY_WEBHOOK_URL` and/or `COOLIFY_WORKER_DEPLOY_WEBHOOK_URL` are set, GitHub Actions calls them after each image push.
+- If your webhook requires auth, `COOLIFY_API_TOKEN` is sent as `Authorization: Bearer ...`.
 - This gives you an immediate deployment trigger from CI.
 - Keep Coolify image auto-update/watch enabled as a fallback safety mechanism.
 
@@ -179,6 +182,11 @@ Create **two services** in Coolify:
 ### Private GHCR package note
 
 If package visibility is private, configure a GHCR registry credential in Coolify with a GitHub PAT that has `read:packages`.
+
+### Optional: deploy via Compose in Coolify
+
+If you prefer a Compose-based Coolify app instead of two image services, use `docker-compose.coolify.yml`.
+Coolify can auto-redeploy the compose app on Git changes, while images still come from GHCR.
 
 ## 8) Troubleshooting
 

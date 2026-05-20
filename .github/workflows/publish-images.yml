@@ -64,7 +64,38 @@ jobs:
             NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
             NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
-      - name: Trigger Coolify deployment
-        if: ${{ matrix.name == 'worker' && secrets.COOLIFY_DEPLOY_WEBHOOK_URL != '' }}
+      - name: Trigger Coolify web deploy
+        if: matrix.name == 'web'
+        env:
+          COOLIFY_WEB_DEPLOY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEB_DEPLOY_WEBHOOK_URL }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
         run: |
-          curl -fsSL -X POST "${{ secrets.COOLIFY_DEPLOY_WEBHOOK_URL }}"
+          if [ -z "${COOLIFY_WEB_DEPLOY_WEBHOOK_URL:-}" ]; then
+            echo "COOLIFY_WEB_DEPLOY_WEBHOOK_URL not set; skipping Coolify web trigger."
+            exit 0
+          fi
+          if [ -z "${COOLIFY_API_TOKEN:-}" ]; then
+            echo "COOLIFY_API_TOKEN not set; cannot call auth-required deploy webhook."
+            exit 1
+          fi
+          curl -fsSL -X POST "$COOLIFY_WEB_DEPLOY_WEBHOOK_URL" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json"
+
+      - name: Trigger Coolify worker deploy
+        if: matrix.name == 'worker'
+        env:
+          COOLIFY_WORKER_DEPLOY_WEBHOOK_URL: ${{ secrets.COOLIFY_WORKER_DEPLOY_WEBHOOK_URL }}
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+        run: |
+          if [ -z "${COOLIFY_WORKER_DEPLOY_WEBHOOK_URL:-}" ]; then
+            echo "COOLIFY_WORKER_DEPLOY_WEBHOOK_URL not set; skipping Coolify worker trigger."
+            exit 0
+          fi
+          if [ -z "${COOLIFY_API_TOKEN:-}" ]; then
+            echo "COOLIFY_API_TOKEN not set; cannot call auth-required deploy webhook."
+            exit 1
+          fi
+          curl -fsSL -X POST "$COOLIFY_WORKER_DEPLOY_WEBHOOK_URL" \
+            -H "Authorization: Bearer $COOLIFY_API_TOKEN" \
+            -H "Content-Type: application/json"
