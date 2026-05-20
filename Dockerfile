@@ -15,6 +15,7 @@ ENV NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
 
 RUN npm run build
 
+
 FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
