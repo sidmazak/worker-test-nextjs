@@ -1,36 +1,192 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Supabase Job Queue Demo (Next.js + Worker + GHCR + Coolify)
 
-## Getting Started
+This project is a production-style queue demo:
 
-First, run the development server:
+- A Next.js dashboard enqueues and visualizes jobs.
+- A separate worker process claims and processes jobs.
+- Supabase stores queue data, events, and worker heartbeats.
+- GitHub Actions builds and pushes Docker images to GHCR.
+- Coolify deploys by image URL only.
+
+## Architecture
+
+- **Web app**: Next.js App Router UI + Server Actions.
+- **Worker**: dedicated Node process in `worker/`, not bundled into the web app.
+- **Database**: Supabase Postgres with RLS + `claim_next_job` RPC.
+- **Realtime**: dashboard subscribes to `jobs`, `job_events`, and `worker_heartbeats`.
+
+## 1) Supabase setup
+
+1. Create a Supabase project.
+2. Open SQL Editor and run:
+   - `sql/schema.sql` (simple copy/paste option), or
+   - `supabase/migrations/001_job_queue.sql` (migration file variant).
+3. Confirm tables exist: `jobs`, `job_events`, `worker_heartbeats`.
+4. Confirm function exists: `claim_next_job(worker_name text)`.
+
+## 2) Environment variables
+
+Copy `.env.example` to `.env.local`:
+
+```bash
+cp .env.example .env.local
+```
+
+Fill in real values:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_URL` (worker/runtime URL, usually same as `NEXT_PUBLIC_SUPABASE_URL`)
+- `SUPABASE_SERVICE_ROLE_KEY`
+- Optional worker tuning:
+  - `WORKER_ID`
+  - `POLL_INTERVAL_MS`
+  - `SIMULATION_STEP_MS`
+
+## 3) Local development
+
+Install root dependencies:
+
+```bash
+npm install
+```
+
+Install worker dependencies:
+
+```bash
+npm install --prefix worker
+```
+
+Run web + worker together:
+
+```bash
+npm run dev:all
+```
+
+Or run separately:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev:worker
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Dashboard URL: [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Health endpoint: [http://localhost:3000/api/health](http://localhost:3000/api/health)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 4) Queue behavior
 
-## Learn More
+- New jobs are inserted as `pending`.
+- Worker claims jobs with `claim_next_job` (safe with `FOR UPDATE SKIP LOCKED`).
+- Worker simulates multiple steps and writes:
+  - job progress (`25 -> 50 -> 75 -> 100`)
+  - timeline events (`job_events`)
+  - final `completed` result JSON or `failed` error.
+- Dashboard updates through Realtime and falls back to polling when needed.
 
-To learn more about Next.js, take a look at the following resources:
+## 5) Docker images
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Web image
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Dockerfile: `Dockerfile`
+- Output mode: Next.js standalone (`next.config.ts`).
 
-## Deploy on Vercel
+Build locally:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+docker build -t worker-test-nextjs-web \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key \
+  .
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Worker image
+
+- Dockerfile: `worker/Dockerfile`
+
+Build locally:
+
+```bash
+docker build -t worker-test-nextjs-worker -f worker/Dockerfile worker
+```
+
+## 6) GitHub Actions -> GHCR
+
+Workflow file: `.github/workflows/publish-images.yml`
+
+It publishes:
+
+- `ghcr.io/sidmazak/worker-test-nextjs-web:latest`
+- `ghcr.io/sidmazak/worker-test-nextjs-worker:latest`
+
+and SHA tags for each image.
+
+### Required GitHub configuration
+
+- **Repository Variable**
+  - `NEXT_PUBLIC_SUPABASE_URL`
+- **Repository Secret**
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `COOLIFY_DEPLOY_WEBHOOK_URL` (optional but recommended for immediate deploy trigger)
+
+`GITHUB_TOKEN` is used automatically for GHCR login/push.
+
+### Auto deploy behavior
+
+- If `COOLIFY_DEPLOY_WEBHOOK_URL` is set, GitHub Actions will call it after images are pushed.
+- This gives you an immediate deployment trigger from CI.
+- Keep Coolify image auto-update/watch enabled as a fallback safety mechanism.
+
+### Changing `sidmazak` later
+
+Edit this line in `.github/workflows/publish-images.yml`:
+
+```yaml
+env:
+  IMAGE_PREFIX: ghcr.io/sidmazak
+```
+
+Then update image links in Coolify to match the new owner/org.
+
+## 7) Coolify deployment (image URL only)
+
+Create **two services** in Coolify:
+
+### Service A: Web
+
+- Image: `ghcr.io/sidmazak/worker-test-nextjs-web:latest`
+- Port: `3000`
+- Health check path: `/api/health`
+- Env vars:
+  - `NEXT_PUBLIC_SUPABASE_URL`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `PORT=3000`
+  - `HOSTNAME=0.0.0.0`
+
+### Service B: Worker
+
+- Image: `ghcr.io/sidmazak/worker-test-nextjs-worker:latest`
+- No public domain needed
+- Replicas: `1` for demo (can scale up later)
+- Env vars:
+  - `SUPABASE_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `WORKER_ID`
+  - `POLL_INTERVAL_MS`
+  - `SIMULATION_STEP_MS`
+
+### Private GHCR package note
+
+If package visibility is private, configure a GHCR registry credential in Coolify with a GitHub PAT that has `read:packages`.
+
+## 8) Troubleshooting
+
+- **Worker offline**
+  - Check `worker_heartbeats.last_seen_at`.
+  - Verify worker service env vars and logs.
+- **RLS errors**
+  - Re-run `sql/schema.sql` to ensure policies and grants exist.
+- **No Realtime updates**
+  - Confirm publication includes `jobs`, `job_events`, `worker_heartbeats`.
+  - Dashboard automatically falls back to polling.
