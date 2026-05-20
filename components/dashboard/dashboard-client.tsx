@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { PublicSupabaseConfig } from "@/lib/supabase/env";
 import type { Job, JobEvent, WorkerHeartbeat } from "@/lib/types/database";
 import { ConnectionBanner } from "@/components/dashboard/connection-banner";
 import { StatsCards } from "@/components/dashboard/stats-cards";
@@ -11,12 +12,14 @@ import { JobDetailPanel } from "@/components/dashboard/job-detail-panel";
 import { WorkerStatus } from "@/components/dashboard/worker-status";
 
 type DashboardClientProps = {
+  supabaseConfig: PublicSupabaseConfig | null;
   initialJobs: Job[];
   initialEvents: JobEvent[];
   initialWorkers: WorkerHeartbeat[];
 };
 
 export function DashboardClient({
+  supabaseConfig,
   initialJobs,
   initialEvents,
   initialWorkers,
@@ -29,17 +32,14 @@ export function DashboardClient({
   );
   const [realtimeConnected, setRealtimeConnected] = useState(false);
 
-  const configured = Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
+  const configured = supabaseConfig !== null;
 
   const refreshData = useCallback(async () => {
-    if (!configured) {
+    if (!supabaseConfig) {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseBrowserClient(supabaseConfig);
     const [{ data: jobsData }, { data: eventsData }, { data: workersData }] =
       await Promise.all([
         supabase.from("jobs").select("*").order("created_at", { ascending: false }).limit(50),
@@ -53,14 +53,14 @@ export function DashboardClient({
     setJobs(jobsData ?? []);
     setEvents(eventsData ?? []);
     setWorkers(workersData ?? []);
-  }, [configured]);
+  }, [supabaseConfig]);
 
   useEffect(() => {
-    if (!configured) {
+    if (!supabaseConfig) {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseBrowserClient(supabaseConfig);
     const channel = supabase
       .channel("queue-live")
       .on(
@@ -92,7 +92,7 @@ export function DashboardClient({
       window.clearInterval(polling);
       void supabase.removeChannel(channel);
     };
-  }, [configured, realtimeConnected, refreshData]);
+  }, [supabaseConfig, realtimeConnected, refreshData]);
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedJobId) ?? null,

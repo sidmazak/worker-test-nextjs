@@ -10,7 +10,22 @@ function readVar(name: string): string | undefined {
   if (!value) {
     return undefined;
   }
-  return value;
+  return value.trim();
+}
+
+export type PublicSupabaseConfig = {
+  url: string;
+  anonKey: string;
+};
+
+/** Runtime-safe read (works with Coolify env vars on the running container). */
+export function getPublicSupabaseConfig(): PublicSupabaseConfig | null {
+  const url = readVar("NEXT_PUBLIC_SUPABASE_URL")?.replace(/\/+$/, "");
+  const anonKey = readVar("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!url || !anonKey) {
+    return null;
+  }
+  return { url, anonKey };
 }
 
 export function getPublicSupabaseEnv(): Record<PublicEnvKey, string> {

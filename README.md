@@ -160,8 +160,8 @@ Create **two services** in Coolify:
 - Image: `ghcr.io/sidmazak/worker-test-nextjs-web:latest`
 - Port: `3000`
 - Health check path: `/api/health`
-- Env vars:
-  - `NEXT_PUBLIC_SUPABASE_URL`
+- Env vars (set on the **running** Coolify service — read at request time by the server):
+  - `NEXT_PUBLIC_SUPABASE_URL` (no trailing slash required; it is trimmed)
   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `PORT=3000`
