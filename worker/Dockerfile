@@ -6,7 +6,9 @@ RUN npm ci
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY src ./src
 RUN npm run build
 
 FROM node:20-alpine AS runner
