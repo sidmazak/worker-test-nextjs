@@ -197,4 +197,5 @@ Coolify can auto-redeploy the compose app on Git changes, while images still com
   - Re-run `sql/schema.sql` to ensure policies and grants exist.
 - **No Realtime updates**
   - Confirm publication includes `jobs`, `job_events`, `worker_heartbeats`.
-  - Dashboard automatically falls back to polling.
+  - On self-hosted Supabase, ensure Realtime is enabled and reachable over WSS from the browser.
+  - Dashboard falls back to 5s polling (banner shows “Realtime unavailable” without flickering).

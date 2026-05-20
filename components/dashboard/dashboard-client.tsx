@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { PublicSupabaseConfig } from "@/lib/supabase/env";
 import type { Job, JobEvent, WorkerHeartbeat } from "@/lib/types/database";
@@ -30,7 +30,10 @@ export function DashboardClient({
   const [selectedJobId, setSelectedJobId] = useState<string | null>(
     initialJobs[0]?.id ?? null
   );
-  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<
+    "connecting" | "connected" | "polling"
+  >("connecting");
+  const realtimeActiveRef = useRef(false);
 
   const configured = supabaseConfig !== null;
 
@@ -60,9 +63,11 @@ export function DashboardClient({
       return;
     }
 
+    let cancelled = false;
     const supabase = createSupabaseBrowserClient(supabaseConfig);
+
     const channel = supabase
-      .channel("queue-live")
+      .channel("queue-live-dashboard")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "jobs" },
@@ -78,21 +83,48 @@ export function DashboardClient({
         { event: "*", schema: "public", table: "worker_heartbeats" },
         () => void refreshData()
       )
-      .subscribe((status) => {
-        setRealtimeConnected(status === "SUBSCRIBED");
+      .subscribe((status, err) => {
+        if (cancelled) {
+          return;
+        }
+        if (status === "SUBSCRIBED") {
+          realtimeActiveRef.current = true;
+          setRealtimeStatus("connected");
+          return;
+        }
+        if (
+          status === "CLOSED" ||
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT"
+        ) {
+          realtimeActiveRef.current = false;
+          setRealtimeStatus("polling");
+          if (err) {
+            console.warn("Supabase Realtime:", err.message);
+          }
+        }
       });
 
+    const connectTimeout = window.setTimeout(() => {
+      if (!cancelled && !realtimeActiveRef.current) {
+        setRealtimeStatus("polling");
+      }
+    }, 8000);
+
     const polling = window.setInterval(() => {
-      if (!realtimeConnected) {
+      if (!realtimeActiveRef.current) {
         void refreshData();
       }
     }, 5000);
 
     return () => {
+      cancelled = true;
+      realtimeActiveRef.current = false;
+      window.clearTimeout(connectTimeout);
       window.clearInterval(polling);
       void supabase.removeChannel(channel);
     };
-  }, [supabaseConfig, realtimeConnected, refreshData]);
+  }, [supabaseConfig, refreshData]);
 
   const selectedJob = useMemo(
     () => jobs.find((job) => job.id === selectedJobId) ?? null,
@@ -111,10 +143,7 @@ export function DashboardClient({
         </p>
       </header>
 
-      <ConnectionBanner
-        configured={configured}
-        realtimeConnected={realtimeConnected}
-      />
+      <ConnectionBanner configured={configured} realtimeStatus={realtimeStatus} />
       <StatsCards jobs={jobs} />
 
       <section className="grid gap-4 lg:grid-cols-12">
